@@ -9,7 +9,7 @@ scanner.onDevicesChanged(() => {
 })
 
 const menuItemWidth = 300;
-const menuItemHeight = 60;
+const menuItemHeight = 80;
 
 const assetsDirectory = path.join(__dirname, 'assets')
 

@@ -3,6 +3,7 @@ import { Client, DefaultMediaReceiver } from 'castv2-client';
 export class CastDevice {
     constructor(host, name, friendlyName) {
         this.client = new Client();
+        this.player = null;
         this.name = name;
         this.friendlyName = friendlyName;
         this.host = host;
@@ -14,46 +15,67 @@ export class CastDevice {
         this.onChangeCallback = callback;
     }
 
+    triggerOnChange() {
+        if (this.onChangeCallback) {
+            this.onChangeCallback(this)
+        }
+    }
+
     connect() {
         this.client.connect(this.host, () => {
             this.getStatus()
-        })
+        });
 
         this.client.on('status', (status) => {
             this.status = status;
-            
-            this.client.getSessions((err, sessions) => {
-                if (sessions.length > 0) {
-                    attachToPlayingMediaSession(sessions[0])
-                }
-            })
 
-            if (this.onChangeCallback) {
-                this.onChangeCallback(this)
-            }
+            this.client.getSessions((err, sessions) => {
+                this.attachToPlayingMediaSession(sessions)
+            });
+
+            this.triggerOnChange();
         });
 
         this.client.on('error', (err) => {
             console.log('Error: %s', err.message);
             this.client.close();
-            if (this.onChangeCallback) {
-                this.onChangeCallback(this)
-            }
+            this.triggerOnChange();
             //todo maybe trigger remove client?
         });
     }
 
-    attachToPlayingMediaSession(session) {
-        this.client.join(session, DefaultMediaReceiver, (err, player) => {
+    attachToPlayingMediaSession(sessions) {
+        if (! sessions || sessions.length === 0) {
+            if (this.player) {
+                this.player = null;
+                this.triggerOnChange();
+            }
+            return
+        }
+        this.client.join(sessions[0], DefaultMediaReceiver, (err, player) => {
 
-            player.getStatus((...args) => {
-                console.log('player stats', args)
-            })
+            this.player = player;
 
-            player.on('status',  (status) => {
-                console.log('status broadcast playerState=%s', status.playerState);
+            player.getStatus((err, status) => {
+                this.updatePlayerStatus(status);
             });
+
+            player.on('status',  () => {
+                player.getStatus((err, status) => {
+                    this.updatePlayerStatus(status);
+                });
+            });
+
+            console.log('player', player)
+
+
         })
+    }
+
+    updatePlayerStatus(status) {
+        this.player.status = status;
+        this.triggerOnChange();
+
     }
 
     getStatus() {
@@ -61,17 +83,15 @@ export class CastDevice {
             if (err) {
                 console.error(err)
             }
-           
+
             this.status = status
             if (this.onChangeCallback) {
                 this.onChangeCallback(this)
             }
-        })
+        });
 
         this.client.getSessions((err, sessions) => {
-            if (sessions.length > 0) {
-                attachToPlayingMediaSession(sessions[0])
-            }
+            this.attachToPlayingMediaSession(sessions)
         })
     }
 
@@ -80,7 +100,7 @@ export class CastDevice {
             name: this.name,
             friendlyName: this.friendlyName,
             host: this.host,
-        }
+        };
         if (this.status) {
             summary.volume = this.status.volume.level;
             summary.muted = this.status.volume.muted;
@@ -92,6 +112,19 @@ export class CastDevice {
                     iconUrl: a.iconUrl
                 }
             }
+        }
+
+        if (this.player && this.player.status) {
+            summary.player = {
+                playerState: this.player.status.playerState,
+                currentTime: this.player.status.currentTime,
+            };
+
+            if (this.player.status.media) {
+                summary.player.duration = this.player.status.media.duration;
+                summary.player.metadata = this.player.status.media.metadata;
+            }
+
         }
 
         return summary;
