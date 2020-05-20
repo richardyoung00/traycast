@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Tray, Menu } from 'electron';
+import { app, BrowserWindow, ipcMain, Tray, Menu, screen } from 'electron';
 import path from 'path';
 import { CastScanner } from './cast-scanner.js';
 
@@ -17,7 +17,9 @@ let tray = undefined
 let trayMenu = undefined
 
 // Don't show the app in the doc
-app.dock.hide()
+if (app.dock) {
+    app.dock.hide()
+}
 
 // Creates tray & window
 app.on('ready', () => {
@@ -34,7 +36,15 @@ app.on('window-all-closed', () => {
 // Creates tray image & toggles window on click
 const createTray = () => {
     tray = new Tray(path.join(assetsDirectory, 'cast-w.png'))
+
+    const contextMenu = Menu.buildFromTemplate([
+        { label: 'Show', click: () => toggleWindow()},
+    ])
+
+    tray.setContextMenu(contextMenu)
+
     tray.on('click', (event) => {
+        tray.closeContextMenu()
         toggleWindow()
     })
 }
@@ -42,6 +52,14 @@ const createTray = () => {
 const getWindowPosition = () => {
     const windowBounds = trayMenu.getBounds()
     const trayBounds = tray.getBounds()
+
+    if (trayBounds.x === 0 && trayBounds.y === 0) {
+        let display = screen.getPrimaryDisplay();
+        let width = display.bounds.width;
+        return {x: display.bounds.width - windowBounds.width, y: display.bounds.height - windowBounds.height}
+    }
+
+    console.log(trayBounds)
 
     // Center window horizontally below the tray icon
     const x = Math.round(trayBounds.x + (trayBounds.width / 2) - (windowBounds.width / 2))
@@ -56,7 +74,7 @@ const getWindowPosition = () => {
 const createWindow = () => {
     trayMenu = new BrowserWindow({
         width: menuItemWidth,
-        height: 0,
+        height: 100,
         show: false,
         frame: false,
         fullscreenable: false,

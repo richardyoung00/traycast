@@ -1,6 +1,12 @@
 import mdns from 'mdns';
 import { CastDevice } from './cast-device.js';
 
+var sequence = [
+    mdns.rst.DNSServiceResolve(),
+    'DNSServiceGetAddrInfo' in mdns.dns_sd ? mdns.rst.DNSServiceGetAddrInfo() : mdns.rst.getaddrinfo({families:[4]}),
+    mdns.rst.makeAddressesUnique()
+];
+
 export class CastScanner {
     constructor() {
         this.devicesChangedCallback = null;
@@ -9,7 +15,7 @@ export class CastScanner {
     }
 
     start() {
-        this.browser = mdns.createBrowser(mdns.tcp('googlecast'));
+        this.browser = mdns.createBrowser(mdns.tcp('googlecast'), {resolverSequence: sequence});
 
         this.browser.on('serviceUp', (service) => {
             console.log('found device "%s" at %s:%d', service.name, service.addresses[0], service.port);
